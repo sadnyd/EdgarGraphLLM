@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>QA API Frontend</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background: #f7f7f7;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        label,
+        select,
+        textarea,
+        button {
+            display: block;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 80px;
+            padding: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .response {
+            margin-top: 30px;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .label-inline {
+            display: inline-block;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Ask a Question</h1>
+
+    <label for="question">Your Question:</label>
+    <textarea id="question" placeholder="Type your question here..."></textarea>
+
+    <label class="label-inline">Question Type:</label>
+    <select id="chainType">
+        <option value="plain">Plain</option>
+        <option value="investment">Investment</option>
+    </select>
+
+    <button onclick="askQuestion()">Submit</button>
+
+    <div class="response" id="response" style="display:none;">
+        <h2>Answer:</h2>
+        <p id="answer"></p>
+        <h3>Sources:</h3>
+        <p id="sources"></p>
+    </div>
+
+    <script>
+        function askQuestion() {
+            const question = document.getElementById('question').value;
+            const chainType = document.getElementById('chainType').value;
+
+            if (!question.trim()) {
+                alert("Please enter a question.");
+                return;
+            }
+
+            fetch('http://localhost:5001/ask', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    question: question,
+                    chain_type: chainType
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('response').style.display = 'block';
+                    document.getElementById('answer').innerText = data.answer || "No answer generated.";
+                    document.getElementById('sources').innerText = data.sources || "No sources provided.";
+                })
+                .catch(error => {
+                    console.error("Error:", error);
+                    alert("Failed to get response from API.");
+                });
+        }
+    </script>
+
+</body>
+
+</html>
