@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 
 # Streamlit page setup
-st.set_page_config(page_title="Question Answering App", page_icon="❓")
+st.set_page_config(page_title="Question Answering App", page_icon="icon.jpg")
 
 st.title("💡 Smart Question Answering")
 st.write("Ask a question and choose the type of response you'd like:")
