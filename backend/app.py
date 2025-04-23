@@ -4,7 +4,10 @@ import textwrap
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import HumanMessage
+from langchain_community.document_loaders import PyPDFLoader
+from werkzeug.utils import secure_filename
 # LangChain and Neo4j imports
 from langchain_community.graphs import Neo4jGraph
 from langchain_community.vectorstores import Neo4jVector
@@ -33,7 +36,7 @@ if not all([NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, GEMINI_API_KEY]):
 VECTOR_INDEX_NAME = 'form_10k_chunks'
 VECTOR_NODE_LABEL = 'Chunk'
 VECTOR_SOURCE_PROPERTY = 'text'
-VECTOR_EMBEDDING_PROPERTY = 'textEmbedding' # Make sure this matches your index creation
+VECTOR_EMBEDDING_PROPERTY = 'textEmbedding' 
 
 # --- Initialize LangChain Components (Done once on startup) ---
 
@@ -45,10 +48,10 @@ try:
         google_api_key=GEMINI_API_KEY
     )
     llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash", # Use gemini-1.5-flash as gemini-2.0-flash might not be available via API key yet
+        model="gemini-2.0-flash", 
         google_api_key=GEMINI_API_KEY,
         temperature=0,
-        convert_system_message_to_human=True # Often needed for Gemini models in Langchain
+        convert_system_message_to_human=True 
     )
     print("Embeddings and LLM initialized successfully.")
 except Exception as e:
@@ -197,11 +200,65 @@ def ask_question():
         import traceback
         traceback.print_exc()
         return jsonify({"error": "An internal error occurred processing your request."}), 500
+    
+
+
+# Create uploads folder if not exists
+UPLOAD_FOLDER = 'uploads'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+@app.route('/ask-pdf', methods=['POST'])
+def ask_pdf_question():
+    """
+    Endpoint to upload a PDF and ask a question.
+    Expects multipart/form-data with:
+    - 'pdf': PDF file
+    - 'question': Question about the PDF content
+    """
+    if 'pdf' not in request.files or 'question' not in request.form:
+        return jsonify({"error": "Both 'pdf' file and 'question' field are required."}), 400
+
+    pdf_file = request.files['pdf']
+    question = request.form['question']
+
+    if pdf_file.filename == '':
+        return jsonify({"error": "No PDF file selected."}), 400
+
+    try:
+        # Save the uploaded PDF
+        filename = secure_filename(pdf_file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        pdf_file.save(filepath)
+
+        # Load the PDF content
+        loader = PyPDFLoader(filepath)
+        documents = loader.load()
+        context = "\n\n".join(doc.page_content for doc in documents)
+
+        if not context.strip():
+            return jsonify({"error": "No readable text found in PDF."}), 400
+
+        # Prompt LLM with context + question
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are an expert PDF assistant. Use the following content to answer questions."),
+            ("human", f"PDF Content:\n{context}\n\nQuestion: {question}")
+        ])
+        chain = prompt | llm
+        response = chain.invoke({"question": question})
+
+        return jsonify({"answer": response.content})
+
+    except Exception as e:
+        print(f"Error during PDF QA: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "An error occurred while processing the PDF."}), 500
+
 
 # --- Run the App ---
 if __name__ == '__main__':
     print("Starting Flask server...")
-    # Use host='0.0.0.0' to make it accessible on your network
-    # Use debug=True for development (auto-reloads), False for production
+   
     app.run(host='0.0.0.0', port=5001, debug=True)
-    # For local testing only use app.run(port=5001, debug=True)
+    
